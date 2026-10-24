@@ -51,6 +51,7 @@ Cabeçalhos aceitos em todas as requisições:
 |---|---|
 | `X-Correlation-Id` | Correlação ponta a ponta (gerado se ausente/inválido; sempre devolvido) |
 | `X-Actor-Id` | Ator registrado na auditoria (`anonymous` se ausente) |
+| `Idempotency-Key` | Obrigatório em `POST /loans`; repetir a chave devolve a resposta original (`Idempotent-Replayed: true`) |
 
 ## 4. Decisões de concorrência, idempotência, cache e auditoria
 Resumo em [ADR 0001](docs/adr/0001-architecture-overview.md). _TODO (Parte 11): versão final aqui._

@@ -30,11 +30,13 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - **Alternativas descartadas:** token otimista `xmin` (muitos retries sob contenção); Serializable (retry obrigatório em 40001); `SELECT ... FOR UPDATE` (dois round-trips com lock); lock distribuído no Redis (tornaria o cache fonte de verdade; Redlock tem garantias frágeis); um registro por exemplar com `SKIP LOCKED` (mais fiel ao mundo físico, mas não exigido — evolução possível).
 
 ### 3. Idempotência: PostgreSQL, mesma transação
-- Tabela `idempotency_keys(key PK, request_hash, status_code, response_body jsonb, created_at)`.
-- Fluxo: `INSERT ... ON CONFLICT DO NOTHING` da chave no início da transação. Inseriu → executa e grava a resposta. Conflito → retorna a resposta armazenada com header `Idempotent-Replayed: true`.
-- Requisições simultâneas com a mesma chave bloqueiam no índice único até a primeira commitar — corretas sem lock extra.
-- Sem header → 400. Mesma chave, payload diferente → 422. Rejeições de negócio (409) são armazenadas; 5xx não (permite retry).
+- Tabela `idempotency_keys(scope, key, request_hash, status_code, response_body jsonb, created_at)`, PK `(scope, key)`.
+- Fluxo (`IdempotentCreateLoanHandler`): `INSERT ... ON CONFLICT DO NOTHING` da chave no início da transação. Inseriu → savepoint, executa o empréstimo e grava a resposta (sucesso ou rejeição de negócio; numa rejeição volta ao savepoint, desfazendo trabalho parcial) e commita tudo junto. Conflito → hash igual: replay da resposta armazenada com `Idempotent-Replayed: true`; hash diferente: 422 `idempotency.key_reused`.
+- Requisições simultâneas com a mesma chave bloqueiam na PK até a primeira commitar e então fazem replay — corretas sem lock extra e sem estado "em andamento" exposto. Se a primeira der rollback, a segunda processa normalmente.
+- Hash da requisição canônica (`bookId|userId`), não dos bytes: formatação do JSON não transforma retry legítimo em 422.
+- Sem header → 400 `idempotency.key_missing`; malformado → 400 `idempotency.key_invalid`. Rejeições de negócio (404/409) são armazenadas e reproduzidas mesmo que o estado mude depois (a chave representa uma tentativa); 5xx não são armazenados (rollback leva a chave junto, permitindo retry).
 - **Por que não Redis:** perderia atomicidade com o empréstimo.
+- **Limitações/evolução:** sem limpeza automática (evolução: job removendo registros > 24h via índice de `created_at`); escopo por endpoint, não por cliente (com JWT, incluir o `sub` na PK).
 
 ### 4. Auditoria: explícita, transacional, append-only
 - Tabela `audit_events(id, entity_type, entity_id, action, actor, occurred_at, correlation_id, data jsonb)`.

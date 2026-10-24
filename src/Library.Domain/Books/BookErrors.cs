@@ -6,7 +6,9 @@ public static class BookErrors
 {
     public static readonly Error NotFound = Error.NotFound("book.not_found", "The book was not found.");
 
-    public static readonly Error Inactive = Error.Conflict("book.inactive", "The book is inactive and cannot be changed.");
+    public static readonly Error Inactive = Error.Conflict("book.inactive", "The book is inactive and cannot be changed or loaned.");
+
+    public static readonly Error Unavailable = Error.Conflict("book.unavailable", "There are no copies of this book available for loan.");
 
     public static readonly Error CopiesBelowLoaned = Error.Conflict(
         "book.copies_below_loaned",

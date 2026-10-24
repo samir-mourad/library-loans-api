@@ -76,6 +76,69 @@ namespace Library.Api.Infrastructure.Persistence.Migrations
 
                     b.ToTable("audit_events", (string)null);
                 });
+
+            modelBuilder.Entity("Library.Domain.Books.Book", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("author");
+
+                    b.Property<int>("AvailableCopies")
+                        .HasColumnType("integer")
+                        .HasColumnName("available_copies");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Isbn")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("character(13)")
+                        .HasColumnName("isbn")
+                        .IsFixedLength();
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("title");
+
+                    b.Property<int>("TotalCopies")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_copies");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_books");
+
+                    b.HasIndex("Isbn")
+                        .IsUnique()
+                        .HasDatabaseName("ix_books_isbn");
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("ix_books_title");
+
+                    b.ToTable("books", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_books_available_copies_range", "available_copies BETWEEN 0 AND total_copies");
+
+                            t.HasCheckConstraint("ck_books_total_copies_range", "total_copies BETWEEN 1 AND 10000");
+                        });
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -1,4 +1,5 @@
 using Library.Api.Features.Audit;
+using Library.Api.Features.Books;
 using Library.Api.Infrastructure.Actor;
 using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
@@ -20,7 +21,8 @@ builder.Services
     .AddActor()
     .AddObservability(builder.Configuration, builder.Environment)
     .AddHealth()
-    .AddAudit();
+    .AddAudit()
+    .AddBooks();
 
 var app = builder.Build();
 
@@ -29,6 +31,7 @@ app.UseErrorHandling();
 app.UseActor();
 
 app.MapHealthEndpoints();
+app.MapBookEndpoints();
 
 app.Run();
 

@@ -1,4 +1,5 @@
 using Library.Api.Features.Audit;
+using Library.Domain.Books;
 using Microsoft.EntityFrameworkCore;
 
 namespace Library.Api.Infrastructure.Persistence;
@@ -9,6 +10,8 @@ namespace Library.Api.Infrastructure.Persistence;
 /// </summary>
 public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbContext(options)
 {
+    public DbSet<Book> Books => Set<Book>();
+
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

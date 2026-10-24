@@ -24,7 +24,7 @@ public static class ConfigurationExtensions
 
     public static IServiceCollection AddClock(this IServiceCollection services)
     {
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(new DatabasePrecisionTimeProvider(TimeProvider.System));
         return services;
     }
 }

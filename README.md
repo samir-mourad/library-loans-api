@@ -14,6 +14,7 @@ docker compose up --build
 ```
 
 - API: http://localhost:8080 — `GET /health/live`, `GET /health/ready`
+- Documentação interativa (Development): http://localhost:8080/scalar — OpenAPI em `/openapi/v1.json`
 - Aspire Dashboard (traces, métricas, logs): http://localhost:18888
 
 Para rodar a API fora do Compose (`dotnet run --project src/Library.Api`), defina as connection strings por variável de ambiente ou user-secrets; a aplicação falha no startup se estiverem ausentes.

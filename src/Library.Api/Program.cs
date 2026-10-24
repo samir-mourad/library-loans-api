@@ -6,6 +6,7 @@ using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.ErrorHandling;
 using Library.Api.Infrastructure.Health;
 using Library.Api.Infrastructure.Observability;
+using Library.Api.Infrastructure.OpenApi;
 using Library.Api.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services
     .AddActor()
     .AddObservability(builder.Configuration, builder.Environment)
     .AddHealth()
+    .AddApiDocumentation()
     .AddAudit()
     .AddBooks();
 
@@ -31,7 +33,9 @@ app.UseErrorHandling();
 app.UseActor();
 
 app.MapHealthEndpoints();
+app.MapApiDocumentation();
 app.MapBookEndpoints();
+app.MapAuditEndpoints();
 
 app.Run();
 

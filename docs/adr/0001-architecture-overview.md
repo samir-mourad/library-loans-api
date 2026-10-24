@@ -45,8 +45,12 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - Sem cache L1 em memória: com várias réplicas, cada uma ficaria desatualizada.
 - Redis indisponível → leitura vai ao PostgreSQL (log + métrica). Por isso o readiness depende só do PostgreSQL; Redis é reportado como `Degraded`.
 
-### 6. Livros: soft delete
-- `DELETE /books/{id}` marca `is_active = false`. Bloqueia novos empréstimos; devoluções e histórico permanecem. Histórico nunca é apagado.
+### 6. Catálogo
+- **Soft delete**: `DELETE /books/{id}` marca `is_active = false`, é idempotente (repetir devolve 204 sem novo evento) e mantém o livro legível. Bloqueia novos empréstimos e alterações; devoluções e histórico permanecem. Nada é apagado fisicamente.
+- **ISBN** normalizado para ISBN-13 (ISBN-10 equivalente colide na unicidade) e imutável após a criação. Unicidade garantida pelo índice único; a violação `23505` vira 409, sem "consultar antes de inserir".
+- **Escritas administrativas com lock pessimista**: `PATCH`/`DELETE` carregam o livro com `SELECT ... FOR UPDATE` dentro de uma transação. Garante diff exato para a auditoria, nenhum update perdido e serialização com os decrementos atômicos dos empréstimos — a regra "total não pode ficar abaixo do emprestado" vive no domínio e vale sob concorrência. O caminho quente (empréstimo) segue com update condicional, sem leitura prévia. Token `xmin` descartado: todo empréstimo altera a linha do livro e geraria conflitos espúrios no PATCH.
+- **Paginação por offset** (`page`, `pageSize` ≤ 100) em livros e auditoria. Evolução: keyset por `(occurred_at, id)` para a trilha de auditoria, que cresce sem limite.
+- **Relógio com precisão de microssegundo** (precisão do `timestamptz`), para que o valor devolvido logo após a escrita seja idêntico ao lido depois.
 
 ### 7. Operação
 - Migrations versionadas; aplicadas por EF migration bundle (imagem `migrator`, self-contained, não-root) em serviço do Compose / `Job` do Kubernetes — nunca por réplicas no startup, em nenhum ambiente, evitando corrida entre pods e acoplamento entre deploy de schema e de código. O EF Core 9+ adquire lock de migração, protegendo execuções concorrentes do bundle.

@@ -29,7 +29,7 @@ internal sealed class AuditTrail(
             Actor = actor.ActorId,
             OccurredAt = occurredAt,
             CorrelationId = correlation.CorrelationId,
-            Data = JsonSerializer.Serialize(data, JsonExtensions.AuditSerializerOptions)
+            Data = JsonSerializer.Serialize(data, JsonExtensions.StorageSerializerOptions)
         });
     }
 }

@@ -1,4 +1,5 @@
 using Library.Api.Features.Audit;
+using Library.Api.Infrastructure.Idempotency;
 using Library.Domain.Books;
 using Library.Domain.Loans;
 using Library.Domain.Users;
@@ -19,6 +20,8 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
     public DbSet<Loan> Loans => Set<Loan>();
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

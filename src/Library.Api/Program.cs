@@ -7,6 +7,7 @@ using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.ErrorHandling;
 using Library.Api.Infrastructure.Health;
+using Library.Api.Infrastructure.Idempotency;
 using Library.Api.Infrastructure.Observability;
 using Library.Api.Infrastructure.OpenApi;
 using Library.Api.Infrastructure.Persistence;
@@ -27,6 +28,7 @@ builder.Services
     .AddObservability(builder.Configuration, builder.Environment)
     .AddHealth()
     .AddApiDocumentation()
+    .AddIdempotency()
     .AddAudit()
     .AddBooks()
     .AddUsers()

@@ -6,9 +6,10 @@ namespace Library.Api.Infrastructure.Serialization;
 public static class JsonExtensions
 {
     /// <summary>
-    /// Shared JSON settings for audit payloads: web casing and enums as names, matching the HTTP contract.
+    /// JSON settings for payloads persisted by the application (audit data, idempotent responses): web casing and
+    /// enums as names, matching the HTTP contract.
     /// </summary>
-    public static readonly JsonSerializerOptions AuditSerializerOptions = new(JsonSerializerDefaults.Web)
+    public static readonly JsonSerializerOptions StorageSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
     };

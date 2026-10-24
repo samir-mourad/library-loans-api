@@ -77,6 +77,46 @@ namespace Library.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_events", (string)null);
                 });
 
+            modelBuilder.Entity("Library.Api.Infrastructure.Idempotency.IdempotencyRecord", b =>
+                {
+                    b.Property<string>("Scope")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("request_hash")
+                        .IsFixedLength();
+
+                    b.Property<string>("ResponseBody")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("response_body");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.HasKey("Scope", "Key")
+                        .HasName("pk_idempotency_keys");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_idempotency_keys_created_at");
+
+                    b.ToTable("idempotency_keys", (string)null);
+                });
+
             modelBuilder.Entity("Library.Domain.Books.Book", b =>
                 {
                     b.Property<Guid>("Id")

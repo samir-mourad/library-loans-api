@@ -24,8 +24,16 @@ internal static class LoanApi
 
     public static string UserLoansPath(Guid userId) => $"{UserApi.UserPath(userId)}/loans";
 
-    public static Task<HttpResponseMessage> RequestLoanAsync(this HttpClient client, Guid bookId, Guid userId) =>
-        client.SendJsonAsync(HttpMethod.Post, LoansPath, new CreateLoanRequest { BookId = bookId, UserId = userId });
+    public const string IdempotencyKeyHeader = "Idempotency-Key";
+
+    public static string NewIdempotencyKey() => Guid.NewGuid().ToString();
+
+    public static Task<HttpResponseMessage> RequestLoanAsync(this HttpClient client, Guid bookId, Guid userId, string? idempotencyKey = null) =>
+        client.SendJsonAsync(
+            HttpMethod.Post,
+            LoansPath,
+            new CreateLoanRequest { BookId = bookId, UserId = userId },
+            new Dictionary<string, string> { [IdempotencyKeyHeader] = idempotencyKey ?? NewIdempotencyKey() });
 
     public static async Task<LoanResponse> CreateLoanAsync(this HttpClient client, Guid bookId, Guid userId)
     {

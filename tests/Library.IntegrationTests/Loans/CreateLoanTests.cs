@@ -15,7 +15,12 @@ public class CreateLoanTests(ApiFactory factory)
         using var client = factory.CreateClient();
         var book = await client.CreateBookAsync(BookApi.NewCreateRequest(totalCopies: 2));
         var user = await client.CreateUserAsync();
-        var headers = new Dictionary<string, string> { ["X-Actor-Id"] = "librarian-3", ["X-Correlation-Id"] = "lend-1" };
+        var headers = new Dictionary<string, string>
+        {
+            ["X-Actor-Id"] = "librarian-3",
+            ["X-Correlation-Id"] = "lend-1",
+            [LoanApi.IdempotencyKeyHeader] = LoanApi.NewIdempotencyKey()
+        };
 
         var response = await client.SendJsonAsync(HttpMethod.Post, LoanApi.LoansPath, new CreateLoanRequest { BookId = book.Id, UserId = user.Id }, headers);
         var loan = await response.ReadAsAsync<LoanResponse>();

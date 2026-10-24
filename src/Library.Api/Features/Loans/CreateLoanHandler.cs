@@ -14,7 +14,7 @@ namespace Library.Api.Features.Loans;
 /// <c>available_copies = available_copies - 1 WHERE is_active AND available_copies &gt; 0</c>.
 /// Under READ COMMITTED a concurrent transaction waits for the row lock and PostgreSQL re-evaluates the predicate on the
 /// committed row, so the last copy is granted exactly once across any number of replicas, without retries.
-/// The loan, its audit event and the decrement commit or roll back together.
+/// Runs inside the caller's transaction, which owns commit, rollback and idempotency.
 /// </summary>
 public sealed class CreateLoanHandler(
     LibraryDbContext dbContext,
@@ -27,7 +27,10 @@ public sealed class CreateLoanHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        if (dbContext.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Loan creation must run inside a transaction owned by the caller.");
+        }
 
         if (!await dbContext.Users.AnyAsync(user => user.Id == request.UserId, cancellationToken))
         {
@@ -53,9 +56,6 @@ public sealed class CreateLoanHandler(
             return Reject(request, LoanErrors.DuplicateActive);
         }
 
-        await transaction.CommitAsync(cancellationToken);
-
-        LoanLog.Created(logger, loan.Id, loan.BookId, loan.UserId);
         return LoanResponse.From(loan, now);
     }
 

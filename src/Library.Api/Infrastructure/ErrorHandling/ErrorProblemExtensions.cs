@@ -21,6 +21,13 @@ public static class ErrorProblemExtensions
             extensions: new Dictionary<string, object?> { [ProblemExtensionKeys.Code] = error.Code });
     }
 
+    public static int StatusCode(this Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return Describe(error.Type).StatusCode;
+    }
+
     private static (int StatusCode, string Title) Describe(ErrorType type) => type switch
     {
         ErrorType.Validation => (StatusCodes.Status400BadRequest, "The request is invalid."),

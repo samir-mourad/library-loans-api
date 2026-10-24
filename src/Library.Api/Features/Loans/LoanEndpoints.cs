@@ -1,6 +1,8 @@
 using Library.Api.Infrastructure.ErrorHandling;
+using Library.Api.Infrastructure.Idempotency;
 using Library.Api.Infrastructure.Pagination;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Library.Api.Features.Loans;
 
@@ -75,13 +77,29 @@ public static class LoanEndpoints
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.Error!.ToProblem();
     }
 
+    /// <summary>
+    /// Requires <c>Idempotency-Key</c>; replays are flagged with <c>Idempotent-Replayed: true</c>.
+    /// </summary>
     private static async Task<Results<Created<LoanResponse>, ProblemHttpResult>> CreateAsync(
         CreateLoanRequest request,
-        CreateLoanHandler handler,
+        [FromHeader(Name = IdempotencyKey.HeaderName)] string? idempotencyKey,
+        IdempotentCreateLoanHandler handler,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(request, cancellationToken);
+        var key = IdempotencyKey.Validate(idempotencyKey);
+        if (key.IsFailure)
+        {
+            return key.Error!.ToProblem();
+        }
 
+        var outcome = await handler.HandleAsync(key.Value, request, cancellationToken);
+        if (outcome.IsReplay)
+        {
+            httpContext.Response.Headers[IdempotencyKey.ReplayedHeaderName] = "true";
+        }
+
+        var result = outcome.Result;
         return result.IsSuccess
             ? TypedResults.Created($"/loans/{result.Value.Id}", result.Value)
             : result.Error!.ToProblem();

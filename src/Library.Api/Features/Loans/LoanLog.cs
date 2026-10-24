@@ -13,6 +13,9 @@ internal static partial class LoanLog
     [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Loan rejected for book {BookId} and user {UserId}: {ReasonCode}")]
     public static partial void Rejected(ILogger logger, Guid bookId, Guid userId, string reasonCode);
 
+    [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "Idempotent replay of key {IdempotencyKey} with status {StatusCode}")]
+    public static partial void IdempotentReplay(ILogger logger, string idempotencyKey, int statusCode);
+
     [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "Loan {LoanId} of book {BookId} closed as {Status}")]
     public static partial void Closed(ILogger logger, Guid loanId, Guid bookId, LoanStatus status);
 }

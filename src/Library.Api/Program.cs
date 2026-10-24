@@ -4,6 +4,7 @@ using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.ErrorHandling;
 using Library.Api.Infrastructure.Health;
 using Library.Api.Infrastructure.Observability;
+using Library.Api.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.Logging.AddStructuredLogging();
 builder.Services
     .AddApplicationOptions()
     .AddClock()
+    .AddPersistence()
     .AddErrorHandling()
     .AddCorrelation()
     .AddActor()

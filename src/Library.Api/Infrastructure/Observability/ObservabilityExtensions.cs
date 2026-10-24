@@ -1,3 +1,4 @@
+using Npgsql;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -9,6 +10,7 @@ public static class ObservabilityExtensions
 {
     private const string OtlpEndpointKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     private const string HealthPath = "/health";
+    private const string NpgsqlMeterName = "Npgsql";
 
     /// <summary>
     /// Structured JSON console logs in UTC with scopes, so correlationId and actorId appear on every entry.
@@ -40,11 +42,13 @@ public static class ObservabilityExtensions
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation(options =>
                     options.Filter = context => !context.Request.Path.StartsWithSegments(HealthPath))
-                .AddHttpClientInstrumentation())
+                .AddHttpClientInstrumentation()
+                .AddNpgsql())
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
+                .AddMeter(NpgsqlMeterName)
                 .AddMeter(Telemetry.MeterName))
             .WithLogging(configureBuilder: null, configureOptions: options =>
             {

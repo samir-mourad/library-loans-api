@@ -37,23 +37,34 @@ services:
       - "18888:18888"
       - "4317:18889"
 
-  # TODO (Parte 3): migrator service running the EF Core migration bundle before the API starts.
+  # Applies EF Core migrations once, before the API starts. Replicas never migrate on startup.
+  migrator:
+    build:
+      context: .
+      dockerfile: src/Library.Api/Dockerfile
+      target: migrator
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
     build:
       context: .
       dockerfile: src/Library.Api/Dockerfile
+      target: runtime
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Maximum Pool Size=8"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable;Maximum Pool Size=8"
       ConnectionStrings__Redis: "redis:6379,abortConnect=false"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
       OTEL_SERVICE_NAME: library-api
     ports:
       - "8080:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 

@@ -25,5 +25,8 @@ jobs:
       - name: Test
         run: dotnet test --solution Library.slnx -c Release --no-build
 
-      - name: Docker build
-        run: docker build -f src/Library.Api/Dockerfile -t library-api:ci .
+      - name: Docker build (api)
+        run: docker build -f src/Library.Api/Dockerfile --target runtime -t library-api:ci .
+
+      - name: Docker build (migrator)
+        run: docker build -f src/Library.Api/Dockerfile --target migrator -t library-migrator:ci .

@@ -1,5 +1,7 @@
+using Library.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
@@ -9,7 +11,8 @@ using Testcontainers.Redis;
 namespace Library.IntegrationTests.Infrastructure;
 
 /// <summary>
-/// Hosts the API against real PostgreSQL and Redis containers, started once per test run and shared by all tests.
+/// Hosts the API against real PostgreSQL and Redis containers, started and migrated once per test run and shared by all tests.
+/// Tests isolate themselves through their own data instead of resetting the database, so they can run in parallel.
 /// Test-only endpoints are added through a startup filter, keeping production code free of test routes.
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
@@ -20,6 +23,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync());
+
+        await using var context = CreateDbContext();
+        await context.Database.MigrateAsync();
+    }
+
+    /// <summary>
+    /// Context bound directly to the test database, for arranging data and asserting persisted state.
+    /// </summary>
+    public LibraryDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<LibraryDbContext>();
+        LibraryDbContextOptions.Configure(options, _postgres.GetConnectionString());
+        return new LibraryDbContext(options.Options);
     }
 
     /// <summary>

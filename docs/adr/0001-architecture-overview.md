@@ -49,13 +49,16 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - `DELETE /books/{id}` marca `is_active = false`. Bloqueia novos empréstimos; devoluções e histórico permanecem. Histórico nunca é apagado.
 
 ### 7. Operação
-- Migrations versionadas; aplicadas por EF migration bundle em serviço `migrator` (Compose) / `Job` (Kubernetes) — nunca por réplicas no startup, evitando corrida entre pods.
+- Migrations versionadas; aplicadas por EF migration bundle (imagem `migrator`, self-contained, não-root) em serviço do Compose / `Job` do Kubernetes — nunca por réplicas no startup, em nenhum ambiente, evitando corrida entre pods e acoplamento entre deploy de schema e de código. O EF Core 9+ adquire lock de migração, protegendo execuções concorrentes do bundle.
+- Sem `EnableRetryOnFailure` no EF: a estratégia de retry conflita com as transações explícitas do empréstimo; falhas transitórias chegam ao cliente, que repete com segurança via `Idempotency-Key`.
+- `DbContext` com snake_case e enums como texto; uma única configuração de provider (`LibraryDbContextOptions`) compartilhada por app, tooling e testes.
 - Pool de conexões: `Maximum Pool Size=8` por réplica (11 × 8 = 88 < `max_connections` padrão 100). Evolução: PgBouncer.
 - OpenTelemetry (traces, métricas, logs) via OTLP; Aspire Dashboard localmente.
 - `/health/live` sem checks de dependência; `/health/ready` verifica PostgreSQL.
 
 ### 8. Testes
-- xUnit v3 com `Assert` nativo (sem bibliotecas de asserção), Testcontainers (PostgreSQL/Redis reais), `WebApplicationFactory`, Respawn.
+- xUnit v3 com `Assert` nativo (sem bibliotecas de asserção), Testcontainers (PostgreSQL/Redis reais), `WebApplicationFactory`. Containers sobem e são migrados uma vez por execução.
+- Isolamento por dados em vez de reset do banco (sem Respawn): cada teste cria e verifica apenas seus próprios registros, mantendo a execução paralela. Um teste falha se o modelo divergir das migrations (`HasPendingModelChanges`).
 - Teste concorrente usa duas instâncias da aplicação contra o mesmo banco para simular réplicas.
 
 ### 9. Modelo de erro: Result, não exceção

@@ -19,6 +19,16 @@ docker compose up --build
 Para rodar a API fora do Compose (`dotnet run --project src/Library.Api`), defina as connection strings por variável de ambiente ou user-secrets; a aplicação falha no startup se estiverem ausentes.
 
 ## 2. Migrations e testes
+As migrations do EF Core ficam em `src/Library.Api/Infrastructure/Persistence/Migrations` e são aplicadas por um *migration bundle* (imagem `migrator`), nunca no startup da API. No Compose, o serviço `migrator` roda e termina antes da `api` subir.
+
+```bash
+dotnet tool restore
+dotnet ef migrations add <Nome> --project src/Library.Api --output-dir Infrastructure/Persistence/Migrations
+docker compose run --rm migrator
+```
+
+Fora do Compose, aplique localmente com `dotnet ef database update --project src/Library.Api` (usa `ConnectionStrings__Postgres`).
+
 Os testes de integração sobem PostgreSQL e Redis via Testcontainers, então exigem Docker em execução.
 
 ```bash

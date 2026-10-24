@@ -18,11 +18,15 @@ API REST de catálogo e empréstimos executada em 2 a 11 réplicas. Requisitos c
 UPDATE books SET available_copies = available_copies - 1
 WHERE id = @id AND is_active AND available_copies > 0;
 ```
-- Executada via `ExecuteUpdateAsync`, na mesma transação do insert do empréstimo, do evento de auditoria e do registro de idempotência. 0 linhas afetadas → 409 `book.unavailable`.
+- Executada via `ExecuteUpdateAsync`, na mesma transação do insert do empréstimo, do evento de auditoria e do registro de idempotência. 0 linhas afetadas → rollback e uma leitura simples só para escolher o erro (404 `book.not_found`, 409 `book.inactive` ou 409 `book.unavailable`); a decisão já foi tomada atomicamente.
 - Defesa em profundidade: `CHECK (available_copies BETWEEN 0 AND total_copies)`.
 - **Por que funciona em Read Committed:** a segunda transação espera o lock da linha e o PostgreSQL reavalia o `WHERE` sobre a versão commitada (EvalPlanQual); ela vê `available_copies = 0` e não atualiza. Sem Serializable, sem retry.
-- Devolução/cancelamento usam a mesma técnica (`UPDATE loans ... WHERE status = 'Active'`), impedindo incremento duplo do estoque.
-- Alteração de quantidade: `available += (novo - total)` só se o resultado for ≥ 0; senão 409.
+- **Um empréstimo ativo por leitor e livro**: índice único parcial `(book_id, user_id) WHERE status = 'Active'`. A requisição concorrente duplicada espera a primeira commitar no índice, recebe a violação, faz rollback (desfazendo seu decremento) e devolve 409 `loan.duplicate_active`.
+- **Devolução/cancelamento**: transação que trava o empréstimo (`SELECT ... FOR UPDATE`), aplica a transição no domínio (`Active → Returned | Cancelled`, senão 409 `loan.not_active`) e devolve o exemplar com `UPDATE ... SET available_copies = available_copies + 1 WHERE available_copies < total_copies`. Duas devoluções simultâneas serializam no lock; a segunda recebe 409 e o estoque sobe uma única vez. Se o incremento não afetar linha, o estado já está inconsistente: falha alta (500 + rollback) em vez de mascarar.
+- **Ordem de locks** sempre `loan → book`; a criação só trava `book` e insere linha nova. Sem ciclo, sem deadlock.
+- Alteração de quantidade (PATCH): sob lock da linha do livro, a regra "total ≥ emprestados" no domínio.
+- Rejeições (sem exemplar, inativo, duplicado) não geram evento de auditoria — nada mudou; ficam em log estruturado e métrica.
+- **Prova automatizada**: dois hosts da aplicação contra o mesmo banco, 20 requisições liberadas juntas para 1 exemplar → exatamente 1 × 201 e 19 × 409, `available_copies = 0`, 1 empréstimo, 1 `LoanCreated`; também 3 exemplares, devolução dupla e duplicidade por leitor.
 - **Alternativas descartadas:** token otimista `xmin` (muitos retries sob contenção); Serializable (retry obrigatório em 40001); `SELECT ... FOR UPDATE` (dois round-trips com lock); lock distribuído no Redis (tornaria o cache fonte de verdade; Redlock tem garantias frágeis); um registro por exemplar com `SKIP LOCKED` (mais fiel ao mundo físico, mas não exigido — evolução possível).
 
 ### 3. Idempotência: PostgreSQL, mesma transação

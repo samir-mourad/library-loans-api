@@ -1,5 +1,6 @@
 using Library.Api.Features.Audit;
 using Library.Api.Features.Books;
+using Library.Api.Features.Loans;
 using Library.Api.Features.Users;
 using Library.Api.Infrastructure.Actor;
 using Library.Api.Infrastructure.Configuration;
@@ -9,6 +10,7 @@ using Library.Api.Infrastructure.Health;
 using Library.Api.Infrastructure.Observability;
 using Library.Api.Infrastructure.OpenApi;
 using Library.Api.Infrastructure.Persistence;
+using Library.Api.Infrastructure.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +20,7 @@ builder.Services
     .AddApplicationOptions()
     .AddClock()
     .AddPersistence()
+    .AddJsonConventions()
     .AddErrorHandling()
     .AddCorrelation()
     .AddActor()
@@ -26,7 +29,8 @@ builder.Services
     .AddApiDocumentation()
     .AddAudit()
     .AddBooks()
-    .AddUsers();
+    .AddUsers()
+    .AddLoans();
 
 var app = builder.Build();
 
@@ -38,6 +42,7 @@ app.MapHealthEndpoints();
 app.MapApiDocumentation();
 app.MapBookEndpoints();
 app.MapUserEndpoints();
+app.MapLoanEndpoints();
 app.MapAuditEndpoints();
 
 app.Run();

@@ -140,6 +140,73 @@ namespace Library.Api.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Library.Domain.Loans.Loan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("book_id");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_reason");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<DateTimeOffset>("DueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("due_at");
+
+                    b.Property<DateTimeOffset>("LoanedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("loaned_at");
+
+                    b.Property<DateTimeOffset?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("returned_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_loans");
+
+                    b.HasIndex("BookId", "LoanedAt")
+                        .HasDatabaseName("ix_loans_book_id_loaned_at");
+
+                    b.HasIndex("BookId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_loans_active_book_user")
+                        .HasFilter("status = 'Active'");
+
+                    b.HasIndex("UserId", "LoanedAt")
+                        .HasDatabaseName("ix_loans_user_id_loaned_at");
+
+                    b.ToTable("loans", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_loans_cancelled_at", "(status = 'Cancelled') = (cancelled_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_loans_due_after_loan", "due_at > loaned_at");
+
+                            t.HasCheckConstraint("ck_loans_returned_at", "(status = 'Returned') = (returned_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_loans_status", "status IN ('Active', 'Returned', 'Cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("Library.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -170,6 +237,23 @@ namespace Library.Api.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_users_email");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("Library.Domain.Loans.Loan", b =>
+                {
+                    b.HasOne("Library.Domain.Books.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_loans_books_book_id");
+
+                    b.HasOne("Library.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_loans_users_user_id");
                 });
 #pragma warning restore 612, 618
         }

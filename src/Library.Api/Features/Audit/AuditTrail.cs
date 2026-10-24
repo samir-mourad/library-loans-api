@@ -2,6 +2,7 @@ using System.Text.Json;
 using Library.Api.Infrastructure.Actor;
 using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.Persistence;
+using Library.Api.Infrastructure.Serialization;
 
 namespace Library.Api.Features.Audit;
 
@@ -15,8 +16,6 @@ internal sealed class AuditTrail(
     ICorrelationContext correlation,
     TimeProvider clock) : IAuditTrail
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     public void Record(string entityType, Guid entityId, string action, object data)
     {
         var occurredAt = clock.GetUtcNow();
@@ -30,7 +29,7 @@ internal sealed class AuditTrail(
             Actor = actor.ActorId,
             OccurredAt = occurredAt,
             CorrelationId = correlation.CorrelationId,
-            Data = JsonSerializer.Serialize(data, SerializerOptions)
+            Data = JsonSerializer.Serialize(data, JsonExtensions.AuditSerializerOptions)
         });
     }
 }

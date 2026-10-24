@@ -1,5 +1,6 @@
 using Library.Api.Features.Audit;
 using Library.Domain.Books;
+using Library.Domain.Loans;
 using Library.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +15,8 @@ public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options)
     public DbSet<Book> Books => Set<Book>();
 
     public DbSet<User> Users => Set<User>();
+
+    public DbSet<Loan> Loans => Set<Loan>();
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 

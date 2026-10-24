@@ -1,5 +1,6 @@
 using Library.Api.Features.Audit;
 using Library.Api.Features.Books;
+using Library.Api.Features.Users;
 using Library.Api.Infrastructure.Actor;
 using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
@@ -24,7 +25,8 @@ builder.Services
     .AddHealth()
     .AddApiDocumentation()
     .AddAudit()
-    .AddBooks();
+    .AddBooks()
+    .AddUsers();
 
 var app = builder.Build();
 
@@ -35,6 +37,7 @@ app.UseActor();
 app.MapHealthEndpoints();
 app.MapApiDocumentation();
 app.MapBookEndpoints();
+app.MapUserEndpoints();
 app.MapAuditEndpoints();
 
 app.Run();

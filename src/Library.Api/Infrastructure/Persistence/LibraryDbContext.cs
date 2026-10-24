@@ -1,5 +1,6 @@
 using Library.Api.Features.Audit;
 using Library.Domain.Books;
+using Library.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
 namespace Library.Api.Infrastructure.Persistence;
@@ -11,6 +12,8 @@ namespace Library.Api.Infrastructure.Persistence;
 public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbContext(options)
 {
     public DbSet<Book> Books => Set<Book>();
+
+    public DbSet<User> Users => Set<User>();
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 

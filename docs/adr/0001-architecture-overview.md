@@ -72,6 +72,12 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - 500 nunca expõe mensagem ou stack trace; a exceção completa vai só para o log, com `correlationId`.
 - **Por quê:** exceção como controle de fluxo esconde o contrato do método e custa caro; `Result` torna explícito o que cada operação pode recusar.
 
+### 11. Dados pessoais fora da trilha de auditoria
+- A trilha é append-only (triggers), portanto nada gravado nela pode ser apagado. Gravar PII ali tornaria impossível atender um pedido de eliminação (LGPD art. 18).
+- `UserCreated` registra apenas o fato (`{ "registered": true }`); o `entity_id` identifica o usuário. Nome e e-mail vivem só em `users`, que pode ser anonimizada sem quebrar a trilha. Logs registram apenas `userId`.
+- E-mail normalizado para minúsculas e único (índice único; violação `23505` → 409).
+- Evolução: endpoint de anonimização (substitui nome/e-mail por marcadores e registra `UserAnonymized`).
+
 ### 10. Correlação e ator
 - `X-Correlation-Id` aceito se casar `^[A-Za-z0-9._:-]{1,128}$`; senão usa o TraceId. Devolvido no response, em scope de log, tag do trace e disponível via `ICorrelationContext` para a auditoria.
 - `X-Actor-Id` resolve `IActorAccessor` (`anonymous` se ausente; 400 `actor.invalid` se vazio, > 100 caracteres ou com caracteres de controle). Sem autenticação no escopo; `IActorAccessor` é o ponto de troca para o `sub` de um JWT.

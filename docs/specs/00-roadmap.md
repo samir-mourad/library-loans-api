@@ -5,7 +5,7 @@ Cada parte tem uma spec própria (`NN-nome.md`) com: objetivo, escopo, fora de e
 | # | Parte | Status |
 |---|---|---|
 | 01 | Fundação: solution, props, Compose, Dockerfile, CI, docs | ✅ |
-| 02 | Transversal: Problem Details, correlação, ator, TimeProvider, logs JSON, OpenTelemetry, health checks | ⏳ |
+| 02 | Transversal: Problem Details, correlação, ator, TimeProvider, logs JSON, OpenTelemetry, health checks | ✅ |
 | 03 | Persistência: DbContext, snake_case, migrations, bundle/migrator, fixture Testcontainers + Respawn | ⏳ |
 | 04 | Auditoria + Catálogo: `audit_events` append-only, CRUD de livros, soft delete, PATCH de quantidade | ⏳ |
 | 05 | Usuários: cadastro e consulta | ⏳ |

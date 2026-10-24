@@ -1,6 +1,8 @@
 using Library.Api.Infrastructure.Actor;
+using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.ErrorHandling;
+using Library.Api.Infrastructure.Health;
 using Library.Api.Infrastructure.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,11 +10,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddStructuredLogging();
 
 builder.Services
+    .AddApplicationOptions()
+    .AddClock()
     .AddErrorHandling()
     .AddCorrelation()
     .AddActor()
     .AddObservability(builder.Configuration, builder.Environment)
-    .AddHealthChecks();
+    .AddHealth();
 
 var app = builder.Build();
 
@@ -20,7 +24,7 @@ app.UseCorrelation();
 app.UseErrorHandling();
 app.UseActor();
 
-app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
+app.MapHealthEndpoints();
 
 app.Run();
 

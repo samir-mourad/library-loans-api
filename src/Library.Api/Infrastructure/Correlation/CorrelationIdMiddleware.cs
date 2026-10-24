@@ -23,7 +23,7 @@ internal sealed partial class CorrelationIdMiddleware(RequestDelegate next, ILog
             return Task.CompletedTask;
         });
 
-        using var scope = logger.BeginScope(new Dictionary<string, object> { ["correlationId"] = correlationId });
+        using var scope = logger.BeginScope("correlationId:{correlationId}", correlationId);
         await next(context);
     }
 

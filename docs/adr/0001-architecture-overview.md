@@ -58,6 +58,17 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - xUnit v3 com `Assert` nativo (sem bibliotecas de asserção), Testcontainers (PostgreSQL/Redis reais), `WebApplicationFactory`, Respawn.
 - Teste concorrente usa duas instâncias da aplicação contra o mesmo banco para simular réplicas.
 
+### 9. Modelo de erro: Result, não exceção
+- Falhas esperadas de negócio são valores (`Error` com `Code`, `Message`, `ErrorType`; `Result`/`Result<T>`) no `Library.Domain`. Exceções ficam para o inesperado.
+- Na borda HTTP, `Error.ToProblem()` mapeia `Validation`/`NotFound`/`Conflict`/`Unprocessable` para 400/404/409/422 em Problem Details com `code`.
+- Toda resposta de erro recebe `correlationId` e `traceId`; respostas sem `code` explícito recebem um padrão (`validation.failed`, `route.not_found`, `internal.error`).
+- 500 nunca expõe mensagem ou stack trace; a exceção completa vai só para o log, com `correlationId`.
+- **Por quê:** exceção como controle de fluxo esconde o contrato do método e custa caro; `Result` torna explícito o que cada operação pode recusar.
+
+### 10. Correlação e ator
+- `X-Correlation-Id` aceito se casar `^[A-Za-z0-9._:-]{1,128}$`; senão usa o TraceId. Devolvido no response, em scope de log, tag do trace e disponível via `ICorrelationContext` para a auditoria.
+- `X-Actor-Id` resolve `IActorAccessor` (`anonymous` se ausente; 400 `actor.invalid` se vazio, > 100 caracteres ou com caracteres de controle). Sem autenticação no escopo; `IActorAccessor` é o ponto de troca para o `sub` de um JWT.
+
 ## Consequências
 - Correção entre 2 e 11 réplicas depende exclusivamente do PostgreSQL (atomicidade, constraints, idempotência); as réplicas são stateless.
 - O desenho evita dependências comerciais (MediatR, FluentAssertions) e infraestrutura extra (broker, lock distribuído).

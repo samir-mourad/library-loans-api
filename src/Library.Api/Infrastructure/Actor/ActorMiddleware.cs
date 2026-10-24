@@ -28,7 +28,7 @@ internal sealed class ActorMiddleware(RequestDelegate next, ILogger<ActorMiddlew
         actor.ActorId = actorId;
         Activity.Current?.SetTag("enduser.id", actorId);
 
-        using var scope = logger.BeginScope(new Dictionary<string, object> { ["actorId"] = actorId });
+        using var scope = logger.BeginScope("actorId:{actorId}", actorId);
         await next(context);
     }
 

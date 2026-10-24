@@ -6,6 +6,9 @@ public static class LoansExtensions
     {
         services.AddScoped<CreateLoanHandler>();
         services.AddScoped<GetLoanHandler>();
+        services.AddScoped<LoanCloser>();
+        services.AddScoped<ReturnLoanHandler>();
+        services.AddScoped<CancelLoanHandler>();
         return services;
     }
 }

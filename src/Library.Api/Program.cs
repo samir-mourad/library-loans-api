@@ -1,3 +1,4 @@
+using Library.Api.Features.Audit;
 using Library.Api.Infrastructure.Actor;
 using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
@@ -18,7 +19,8 @@ builder.Services
     .AddCorrelation()
     .AddActor()
     .AddObservability(builder.Configuration, builder.Environment)
-    .AddHealth();
+    .AddHealth()
+    .AddAudit();
 
 var app = builder.Build();
 

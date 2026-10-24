@@ -1,3 +1,4 @@
+using Library.Api.Features.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Library.Api.Infrastructure.Persistence;
@@ -8,6 +9,8 @@ namespace Library.Api.Infrastructure.Persistence;
 /// </summary>
 public sealed class LibraryDbContext(DbContextOptions<LibraryDbContext> options) : DbContext(options)
 {
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(LibraryDbContext).Assembly);

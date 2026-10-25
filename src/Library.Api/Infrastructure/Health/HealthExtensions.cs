@@ -2,6 +2,7 @@ using Library.Api.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace Library.Api.Infrastructure.Health;
 
@@ -26,7 +27,7 @@ public static class HealthExtensions
                 tags: [ReadyTag],
                 timeout: CheckTimeout)
             .AddRedis(
-                provider => ConnectionStrings(provider).Redis,
+                provider => provider.GetRequiredService<IConnectionMultiplexer>(),
                 name: "redis",
                 failureStatus: HealthStatus.Degraded,
                 tags: [ReadyTag],

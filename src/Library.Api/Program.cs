@@ -3,6 +3,7 @@ using Library.Api.Features.Books;
 using Library.Api.Features.Loans;
 using Library.Api.Features.Users;
 using Library.Api.Infrastructure.Actor;
+using Library.Api.Infrastructure.Caching;
 using Library.Api.Infrastructure.Configuration;
 using Library.Api.Infrastructure.Correlation;
 using Library.Api.Infrastructure.ErrorHandling;
@@ -21,6 +22,7 @@ builder.Services
     .AddApplicationOptions()
     .AddClock()
     .AddPersistence()
+    .AddCaching()
     .AddJsonConventions()
     .AddErrorHandling()
     .AddCorrelation()

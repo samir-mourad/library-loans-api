@@ -14,4 +14,4 @@ Cada parte tem uma spec própria (`NN-nome.md`) com: objetivo, escopo, fora de e
 | 08 | Cache: cache-aside Redis, invalidação pós-commit, fail-open | ✅ |
 | 09 | Métricas de negócio | ✅ |
 | 10 | Kubernetes: manifests YAML (Deployment, Service, ConfigMap, Secret de exemplo, Job de migration) | ✅ |
-| 11 | README e ADRs finais | ⏳ |
+| 11 | README e ADRs finais | ✅ |

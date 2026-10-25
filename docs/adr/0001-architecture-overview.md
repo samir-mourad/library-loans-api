@@ -46,10 +46,12 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - Ator via header `X-Actor-Id` (sem autenticação no escopo — limitação documentada; evolução: claim `sub` de JWT). Correlação via `X-Correlation-Id` ou TraceId do `Activity`.
 
 ### 5. Cache: cache-aside Redis, somente L2, fail-open
-- Cacheados: `GET /books/{id}` e `GET /books/{id}/availability`. Listagem não (invalidação de paginação/filtros não compensa).
-- Invalidação por remoção da chave **após o commit**, TTL curto (~60s) como rede de segurança para a corrida de repopulação com valor antigo.
+- **Um snapshot por livro** (`library:v1:book:{id}`, JSON do `BookResponse`) serve `GET /books/{id}` e `GET /books/{id}/availability` — uma mudança, uma invalidação, sem as duas leituras divergirem. Listagem, históricos e 404 não são cacheados (sem cache negativo).
+- Invalidação por remoção da chave **após o commit** (empréstimo novo, devolução, cancelamento, PATCH, DELETE); replay idempotente não invalida. TTL `Cache:BookTtlSeconds` (padrão 60s).
+- **Corrida residual aceita**: leitor lê valor antigo → escritor commita e remove → leitor grava o antigo. Fica velho por no máximo um TTL; aceitável porque a disponibilidade exibida é informativa e o empréstimo decide no PostgreSQL. Evolução: *delayed double delete* ou snapshot versionado.
 - Sem cache L1 em memória: com várias réplicas, cada uma ficaria desatualizada.
-- Redis indisponível → leitura vai ao PostgreSQL (log + métrica). Por isso o readiness depende só do PostgreSQL; Redis é reportado como `Degraded`.
+- **Fail-open**: qualquer falha do Redis vira log de warning e a operação segue pelo PostgreSQL. Um único `IConnectionMultiplexer` com `AbortOnConnectFail=false`, timeouts de 2s (connect) / 1s (comandos) e `BacklogPolicy.FailFast` (não enfileira comandos desconectado) — com Redis fora, uma leitura leva dezenas de ms, não segundos. O health check usa o mesmo multiplexer. Readiness depende só do PostgreSQL; Redis é reportado como `Degraded`.
+- StackExchange.Redis 2.x (a 3.x quebraria o pacote de health check, compilado contra 2.x). Spans Redis via `OpenTelemetry.Instrumentation.StackExchangeRedis` (beta no contrib por convenção semântica instável; única instrumentação oficial, versão fixada).
 
 ### 6. Catálogo
 - **Soft delete**: `DELETE /books/{id}` marca `is_active = false`, é idempotente (repetir devolve 204 sem novo evento) e mantém o livro legível. Bloqueia novos empréstimos e alterações; devoluções e histórico permanecem. Nada é apagado fisicamente.

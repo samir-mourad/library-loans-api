@@ -43,6 +43,7 @@ _TODO (Parte 03): migrations._
 | `ConnectionStrings__Postgres` | Connection string do PostgreSQL (obrigatória) |
 | `ConnectionStrings__Redis` | Connection string do Redis (obrigatória) |
 | `Loans__DefaultPeriodDays` | Prazo padrão do empréstimo em dias, 1–365 (padrão 14) |
+| `Cache__BookTtlSeconds` | TTL do snapshot de livro no Redis, 1–3600 (padrão 60) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint OTLP; se ausente, a telemetria não é exportada |
 
 Cabeçalhos aceitos em todas as requisições:

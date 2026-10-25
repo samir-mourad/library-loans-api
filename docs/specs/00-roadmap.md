@@ -11,7 +11,7 @@ Cada parte tem uma spec própria (`NN-nome.md`) com: objetivo, escopo, fora de e
 | 05 | Usuários: cadastro e consulta, auditoria sem PII | ✅ |
 | 06 | Empréstimos: criar (atômico), devolver, cancelar, disponibilidade, histórico; teste concorrente | ✅ |
 | 07 | Idempotência: `Idempotency-Key`, replay, 400/422 | ✅ |
-| 08 | Cache: cache-aside Redis, invalidação pós-commit, fail-open | ⏳ |
+| 08 | Cache: cache-aside Redis, invalidação pós-commit, fail-open | ✅ |
 | 09 | Métricas e logs de negócio | ⏳ |
 | 10 | Kubernetes: manifests com Kustomize, HPA 2–11, Job de migration | ⏳ |
 | 11 | README e ADRs finais | ⏳ |

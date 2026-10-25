@@ -1,7 +1,7 @@
 # ADR 0001 — Visão geral da arquitetura
 
 - **Status:** aceito
-- **Data:** 2026-10-24
+- **Data:** 2026-10-24 (revisado em 2026-10-25, consistente com a entrega)
 
 ## Contexto
 API REST de catálogo e empréstimos executada em 2 a 11 réplicas. Requisitos centrais: nenhum empréstimo duplicado do último exemplar sob concorrência, idempotência na criação de empréstimo, trilha de auditoria de negócio, cache Redis coerente, observabilidade e operação em Kubernetes. O enunciado prioriza corretude e clareza sobre quantidade de padrões.
@@ -25,9 +25,9 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - **Devolução/cancelamento**: transação que trava o empréstimo (`SELECT ... FOR UPDATE`), aplica a transição no domínio (`Active → Returned | Cancelled`, senão 409 `loan.not_active`) e devolve o exemplar com `UPDATE ... SET available_copies = available_copies + 1 WHERE available_copies < total_copies`. Duas devoluções simultâneas serializam no lock; a segunda recebe 409 e o estoque sobe uma única vez. Se o incremento não afetar linha, o estado já está inconsistente: falha alta (500 + rollback) em vez de mascarar.
 - **Ordem de locks** sempre `loan → book`; a criação só trava `book` e insere linha nova. Sem ciclo, sem deadlock.
 - Alteração de quantidade (PATCH): sob lock da linha do livro, a regra "total ≥ emprestados" no domínio.
-- Rejeições (sem exemplar, inativo, duplicado) não geram evento de auditoria — nada mudou; ficam em log estruturado e métrica.
+- Rejeições (sem exemplar, inativo, duplicado) não geram evento de auditoria — nada mudou; ficam em log estruturado, e a falta de exemplar também vira a métrica `library.loans.unavailable`.
 - **Prova automatizada**: dois hosts da aplicação contra o mesmo banco, 20 requisições liberadas juntas para 1 exemplar → exatamente 1 × 201 e 19 × 409, `available_copies = 0`, 1 empréstimo, 1 `LoanCreated`; também 3 exemplares, devolução dupla e duplicidade por leitor.
-- **Alternativas descartadas:** token otimista `xmin` (muitos retries sob contenção); Serializable (retry obrigatório em 40001); `SELECT ... FOR UPDATE` (dois round-trips com lock); lock distribuído no Redis (tornaria o cache fonte de verdade; Redlock tem garantias frágeis); um registro por exemplar com `SKIP LOCKED` (mais fiel ao mundo físico, mas não exigido — evolução possível).
+- **Alternativas descartadas:** token otimista `xmin` (muitos retries sob contenção); Serializable (retry obrigatório em 40001); `SELECT ... FOR UPDATE` para criar o empréstimo (dois round-trips segurando lock no caminho quente — o lock fica reservado para devolução e escritas administrativas, que precisam do estado lido); lock distribuído no Redis (tornaria o cache fonte de verdade; Redlock tem garantias frágeis); um registro por exemplar com `SKIP LOCKED` (mais fiel ao mundo físico, mas não exigido — evolução possível).
 
 ### 3. Idempotência: PostgreSQL, mesma transação
 - Tabela `idempotency_keys(scope, key, request_hash, status_code, response_body jsonb, created_at)`, PK `(scope, key)`.
@@ -42,7 +42,7 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - Tabela `audit_events(id, entity_type, entity_id, action, actor, occurred_at, correlation_id, data jsonb)`.
 - Escrita pelos handlers com intenção de negócio (`BookCreated`, `LoanReturned`, ...), na mesma transação.
 - **Por que não interceptor do EF:** captura mudança técnica sem intenção, e `ExecuteUpdate` não passa pelo change tracker — o decremento atômico ficaria invisível.
-- Trigger bloqueia `UPDATE`/`DELETE` em `audit_events`.
+- Triggers bloqueiam `UPDATE`, `DELETE` e `TRUNCATE` em `audit_events` (coberto por teste).
 - Ator via header `X-Actor-Id` (sem autenticação no escopo — limitação documentada; evolução: claim `sub` de JWT). Correlação via `X-Correlation-Id` ou TraceId do `Activity`.
 
 ### 5. Cache: cache-aside Redis, somente L2, fail-open
@@ -67,7 +67,8 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - Pool de conexões: `Maximum Pool Size=8` por réplica (11 × 8 = 88 < `max_connections` padrão 100). Evolução: PgBouncer.
 - OpenTelemetry (traces, métricas, logs) via OTLP; Aspire Dashboard localmente.
 - Métricas de negócio estritamente as pedidas: `library.loans.created`, `library.loans.unavailable`, `library.loans.idempotent_replays` (counters, sem tags) e `library.loans.request.duration` (histograma em segundos). Contam só desfechos decididos (após commit, rejeição final ou replay).
-- `/health/live` sem checks de dependência; `/health/ready` verifica PostgreSQL.
+- `/health/live` sem checks de dependência; `/health/ready` exige PostgreSQL e reporta Redis como `Degraded` quando indisponível.
+- Kubernetes mínimo em YAML puro (`deploy/k8s`): Deployment, Service, ConfigMap, Secret de exemplo e Job de migration. HPA, PDB e Ingress ficam como evolução.
 
 ### 8. Testes
 - xUnit v3 com `Assert` nativo (sem bibliotecas de asserção), Testcontainers (PostgreSQL/Redis reais), `WebApplicationFactory`. Containers sobem e são migrados uma vez por execução.

@@ -161,6 +161,12 @@ kubectl apply -f deploy/k8s/deployment.yaml -f deploy/k8s/service.yaml
 
 As imagens nos manifests (`library-api:1.0.0` e `library-migrator:1.0.0`) são nomes de exemplo. Antes de usar, é preciso publicar as imagens num registry.
 
+O Job de migration tem nome fixo, e o Kubernetes não deixa reaplicar um Job que já terminou. Para rodar as migrations de uma nova versão, apague o Job anterior antes:
+
+```bash
+kubectl delete job library-api-migrations --ignore-not-found
+```
+
 Sobre as probes: a de liveness não depende do banco nem do Redis, então uma queda deles nunca reinicia a API. A de readiness tira a réplica do balanceamento só se o PostgreSQL estiver fora. Sem o Redis a réplica continua atendendo, só sem cache.
 
 ## 7. Por que funciona com 2 a 11 réplicas

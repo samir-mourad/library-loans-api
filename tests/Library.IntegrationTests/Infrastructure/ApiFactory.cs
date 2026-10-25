@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 
@@ -19,11 +20,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
     private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
+    private IConnectionMultiplexer? _redisConnection;
+
+    /// <summary>
+    /// Direct access to the test Redis, for asserting cache contents.
+    /// </summary>
+    public IDatabase Redis => _redisConnection?.GetDatabase()
+        ?? throw new InvalidOperationException("Redis is not connected yet.");
 
     public async ValueTask InitializeAsync()
     {
         await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync());
 
+        _redisConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
         await using var context = CreateDbContext();
         await context.Database.MigrateAsync();
     }
@@ -55,6 +64,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
+        if (_redisConnection is not null)
+        {
+            await _redisConnection.DisposeAsync();
+        }
+
         await _postgres.DisposeAsync();
         await _redis.DisposeAsync();
     }

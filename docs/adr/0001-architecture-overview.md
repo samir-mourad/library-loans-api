@@ -66,6 +66,7 @@ WHERE id = @id AND is_active AND available_copies > 0;
 - `DbContext` com snake_case e enums como texto; uma única configuração de provider (`LibraryDbContextOptions`) compartilhada por app, tooling e testes.
 - Pool de conexões: `Maximum Pool Size=8` por réplica (11 × 8 = 88 < `max_connections` padrão 100). Evolução: PgBouncer.
 - OpenTelemetry (traces, métricas, logs) via OTLP; Aspire Dashboard localmente.
+- Métricas de negócio estritamente as pedidas: `library.loans.created`, `library.loans.unavailable`, `library.loans.idempotent_replays` (counters, sem tags) e `library.loans.request.duration` (histograma em segundos). Contam só desfechos decididos (após commit, rejeição final ou replay).
 - `/health/live` sem checks de dependência; `/health/ready` verifica PostgreSQL.
 
 ### 8. Testes

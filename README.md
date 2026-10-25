@@ -54,6 +54,17 @@ Cabeçalhos aceitos em todas as requisições:
 | `X-Actor-Id` | Ator registrado na auditoria (`anonymous` se ausente) |
 | `Idempotency-Key` | Obrigatório em `POST /loans`; repetir a chave devolve a resposta original (`Idempotent-Replayed: true`) |
 
+### Métricas de negócio (meter `Library.Api`, exportado via OTLP)
+
+| Métrica | Tipo | Significado |
+|---|---|---|
+| `library.loans.created` | Counter | Empréstimos criados |
+| `library.loans.unavailable` | Counter | Pedidos rejeitados por falta de exemplar |
+| `library.loans.idempotent_replays` | Counter | Pedidos respondidos a partir de uma `Idempotency-Key` já usada |
+| `library.loans.request.duration` | Histogram (s) | Latência do `POST /loans` |
+
+Localmente, veja em http://localhost:18888 → Métricas → `library-api` → `Library.Api`.
+
 ## 4. Decisões de concorrência, idempotência, cache e auditoria
 Resumo em [ADR 0001](docs/adr/0001-architecture-overview.md). _TODO (Parte 11): versão final aqui._
 

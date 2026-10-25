@@ -1,14 +1,14 @@
 # Library Loans API
 
-API REST em .NET 10 para catálogo e empréstimos de uma biblioteca, projetada para rodar em múltiplas réplicas com integridade sob concorrência, idempotência, auditoria de negócio e cache coerente.
+API de catálogo e empréstimos de uma biblioteca, feita em .NET 10 com PostgreSQL e Redis.
 
-Decisões detalhadas em [ADR 0001](docs/adr/0001-architecture-overview.md) · enunciado em [docs/challenge.md](docs/challenge.md) · trabalho dividido em partes em [docs/specs](docs/specs/00-roadmap.md).
+O foco é corretude: dois pedidos ao mesmo tempo nunca emprestam o mesmo último exemplar, repetir um pedido não cria empréstimo duplicado, e toda mudança fica registrada numa trilha de auditoria.
 
-**Stack**: .NET 10 (Minimal APIs) · PostgreSQL 17 + EF Core/Npgsql · Redis 7 · OpenTelemetry · xUnit v3 + Testcontainers · Docker Compose · Kubernetes.
+O raciocínio completo de cada decisão está no [ADR 0001](docs/adr/0001-architecture-overview.md). O enunciado original está em [docs/challenge.md](docs/challenge.md).
 
-## 1. Pré-requisitos e execução
-- .NET SDK 10.0.x
-- Docker Desktop (ou Docker Engine + Compose v2)
+## Testando em 2 minutos
+
+Com o Docker rodando:
 
 ```bash
 cp .env.example .env
@@ -18,16 +18,31 @@ cp .env.example .env
 docker compose up --build
 ```
 
-O Compose sobe PostgreSQL, Redis, o Aspire Dashboard, o `migrator` (aplica as migrations e termina) e a API.
+Isso sobe PostgreSQL, Redis, um painel de observabilidade, aplica as migrations e inicia a API.
 
-- API: http://localhost:8080 — `GET /health/live`, `GET /health/ready`
-- Documentação interativa (Development): http://localhost:8080/scalar — OpenAPI em `/openapi/v1.json`
-- Aspire Dashboard (traces, métricas, logs): http://localhost:18888
+Abra http://localhost:8080/scalar para usar a API pelo navegador. Um roteiro rápido:
 
-Para rodar a API fora do Compose (`dotnet run --project src/Library.Api`), defina as connection strings por variável de ambiente ou user-secrets; a aplicação falha no startup se estiverem ausentes.
+1. `POST /books` com `{"title":"Clean Code","author":"Robert C. Martin","isbn":"9780132350884","totalCopies":1}`
+2. `POST /users` duas vezes, com e-mails diferentes
+3. `POST /loans` com o livro e o primeiro usuário, enviando o cabeçalho `Idempotency-Key` com qualquer valor (por exemplo, um UUID). Resultado: **201**
+4. Repita o mesmo pedido com a mesma chave. Resultado: o mesmo empréstimo, com `Idempotent-Replayed: true`
+5. Peça o livro para o segundo usuário. Resultado: **409** `book.unavailable`
+6. `POST /loans/{id}/return` e depois `GET /books/{id}/history` para ver o histórico preservado
+
+Em http://localhost:18888 (Aspire Dashboard) dá para ver os traces, logs e métricas de cada requisição.
+
+## 1. Pré-requisitos e execução
+
+- .NET SDK 10
+- Docker Desktop (ou Docker Engine com Compose v2)
+
+O `docker compose up --build` acima é tudo o que é preciso. Para rodar só a API fora do Docker (`dotnet run --project src/Library.Api`), configure as connection strings por variável de ambiente ou user-secrets. A aplicação não sobe sem elas.
 
 ## 2. Migrations e testes
-As migrations do EF Core ficam em `src/Library.Api/Infrastructure/Persistence/Migrations` e são aplicadas por um *migration bundle* (imagem `migrator`), nunca no startup da API. No Compose, o serviço `migrator` roda e termina antes da `api` subir.
+
+As migrations ficam em `src/Library.Api/Infrastructure/Persistence/Migrations`. Elas nunca rodam no startup da API: um container separado (`migrator`) aplica as migrations antes de a API subir. Com várias réplicas, isso evita que todas tentem migrar o banco ao mesmo tempo.
+
+Criar uma migration nova:
 
 ```bash
 dotnet tool restore
@@ -37,143 +52,125 @@ dotnet tool restore
 dotnet ef migrations add <Nome> --project src/Library.Api --output-dir Infrastructure/Persistence/Migrations
 ```
 
+Aplicar:
+
 ```bash
 docker compose run --rm migrator
 ```
 
-Fora do Compose, aplique localmente com `dotnet ef database update --project src/Library.Api` (usa `ConnectionStrings__Postgres`).
-
-Os testes de integração sobem PostgreSQL e Redis reais via Testcontainers, então exigem Docker em execução:
+Rodar os testes (precisam do Docker, porque sobem PostgreSQL e Redis de verdade):
 
 ```bash
 dotnet test --solution Library.slnx
 ```
 
-Cobertura relevante: regras de domínio (unitários); fluxos HTTP completos; **teste concorrente do último exemplar** (dois hosts, 20 requisições simultâneas); idempotência sequencial e concorrente; preservação de histórico após devolução/cancelamento; cache e queda do Redis; auditoria append-only; métricas.
+Os testes cobrem as regras de negócio, os fluxos completos da API e os cenários pedidos no enunciado: 20 pedidos simultâneos pelo último exemplar (exatamente um vence), idempotência, preservação do histórico após devolução e cancelamento, e o comportamento com o Redis fora do ar.
 
 ## 3. Variáveis de ambiente
-| Variável | Descrição |
+
+| Variável | Para que serve |
 |---|---|
-| `ConnectionStrings__Postgres` | Connection string do PostgreSQL (obrigatória) |
-| `ConnectionStrings__Redis` | Connection string do Redis (obrigatória) |
-| `Loans__DefaultPeriodDays` | Prazo padrão do empréstimo em dias, 1–365 (padrão 14) |
-| `Cache__BookTtlSeconds` | TTL do snapshot de livro no Redis, 1–3600 (padrão 60) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint OTLP; se ausente, a telemetria não é exportada |
+| `ConnectionStrings__Postgres` | Conexão com o PostgreSQL (obrigatória) |
+| `ConnectionStrings__Redis` | Conexão com o Redis (obrigatória) |
+| `Loans__DefaultPeriodDays` | Prazo do empréstimo em dias (padrão 14) |
+| `Cache__BookTtlSeconds` | Por quanto tempo um livro fica no cache (padrão 60s) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Para onde enviar traces, métricas e logs (opcional) |
 
-Nenhum segredo é versionado: o Compose lê credenciais do `.env` (fora do Git; `.env.example` só tem placeholders) e o Kubernetes, de um Secret.
+Nenhum segredo está no repositório. O Docker Compose lê as credenciais do arquivo `.env`, que fica fora do Git (o `.env.example` só tem valores de exemplo).
 
-Cabeçalhos aceitos em todas as requisições:
+Cabeçalhos aceitos:
 
-| Cabeçalho | Uso |
+| Cabeçalho | Para que serve |
 |---|---|
-| `X-Correlation-Id` | Correlação ponta a ponta (gerado se ausente/inválido; sempre devolvido) |
-| `X-Actor-Id` | Ator registrado na auditoria (`anonymous` se ausente) |
-| `Idempotency-Key` | Obrigatório em `POST /loans`; repetir a chave devolve a resposta original (`Idempotent-Replayed: true`) |
+| `Idempotency-Key` | Obrigatório em `POST /loans`. Repetir a mesma chave devolve a resposta original |
+| `X-Actor-Id` | Quem está fazendo a operação, registrado na auditoria (`anonymous` se não vier) |
+| `X-Correlation-Id` | Identificador para rastrear a requisição nos logs (gerado se não vier) |
 
 ## Endpoints
-| Método | Rota | Descrição |
+
+| Método | Rota | O que faz |
 |---|---|---|
-| POST | `/books` | Cadastra livro (ISBN-10/13 validado e normalizado para ISBN-13, único) |
-| GET | `/books` | Lista com `search`, `isbn`, `includeInactive`, `page`, `pageSize` |
-| GET | `/books/{id}` | Consulta livro (inclusive inativo) |
-| PATCH | `/books/{id}` | Atualização parcial de título, autor e quantidade |
-| DELETE | `/books/{id}` | **Desativa** o livro (soft delete) |
-| GET | `/books/{id}/availability` | Disponibilidade atual |
+| POST | `/books` | Cadastra um livro (ISBN validado e único) |
+| GET | `/books` | Lista livros, com busca e paginação |
+| GET | `/books/{id}` | Consulta um livro |
+| PATCH | `/books/{id}` | Altera título, autor ou quantidade |
+| DELETE | `/books/{id}` | Desativa o livro |
+| GET | `/books/{id}/availability` | Mostra quantos exemplares estão livres |
 | GET | `/books/{id}/history` | Histórico de empréstimos do livro |
-| POST | `/users` | Cadastra leitor (e-mail único) |
-| GET | `/users/{id}` | Consulta leitor |
-| GET | `/users/{id}/loans` | Histórico de empréstimos do leitor (filtro `status`) |
-| POST | `/loans` | Empresta um exemplar — **exige `Idempotency-Key`** |
-| GET | `/loans/{id}` | Consulta empréstimo |
+| POST | `/users` | Cadastra um leitor |
+| GET | `/users/{id}` | Consulta um leitor |
+| GET | `/users/{id}/loans` | Histórico de empréstimos do leitor |
+| POST | `/loans` | Empresta um exemplar |
+| GET | `/loans/{id}` | Consulta um empréstimo |
 | POST | `/loans/{id}/return` | Devolve |
-| POST | `/loans/{id}/cancel` | Cancela, com `reason` opcional |
-| GET | `/audit-events` | Trilha de auditoria (`entityType`, `entityId`, `action`, `from`, `to`) |
-| GET | `/health/live` · `/health/ready` | Liveness e readiness |
+| POST | `/loans/{id}/cancel` | Cancela (motivo opcional) |
+| GET | `/audit-events` | Consulta a trilha de auditoria |
+| GET | `/health/live`, `/health/ready` | Health checks |
 
-**Ajustes em relação à lista sugerida no enunciado:**
-- `DELETE /books/{id}` desativa em vez de remover, é idempotente (repetir devolve 204) e o livro continua consultável — o histórico nunca é apagado.
-- `PATCH /books/{id}` é parcial (campo ausente = inalterado); o ISBN é imutável depois do cadastro.
-- `POST /loans` exige o cabeçalho `Idempotency-Key` (400 se ausente).
-- Adicionados `GET /users/{id}` e `GET /loans/{id}`; `POST /loans/{id}/cancel` aceita `reason`.
+Mudanças em relação à lista sugerida no enunciado:
 
-Erros seguem Problem Details (RFC 9457) com `code` estável (ex.: `book.unavailable`), `correlationId` e `traceId`: 400 validação, 404 inexistente, 409 conflito de regra/estado, 422 `Idempotency-Key` reutilizada com outro pedido.
+- `DELETE /books/{id}` desativa o livro em vez de apagar. Ele continua consultável e o histórico é mantido.
+- `PATCH /books/{id}` altera só os campos enviados. O ISBN não muda depois do cadastro.
+- `POST /loans` exige o cabeçalho `Idempotency-Key`.
+- Incluí `GET /users/{id}` e `GET /loans/{id}`, e o cancelamento aceita um motivo.
 
-## Métricas de negócio
-Meter `Library.Api`, exportado via OTLP:
+Os erros seguem o padrão Problem Details, sempre com um `code` legível (por exemplo `book.unavailable`) e o `correlationId` da requisição.
 
-| Métrica | Tipo | Significado |
-|---|---|---|
-| `library.loans.created` | Counter | Empréstimos criados |
-| `library.loans.unavailable` | Counter | Pedidos rejeitados por falta de exemplar |
-| `library.loans.idempotent_replays` | Counter | Pedidos respondidos a partir de uma `Idempotency-Key` já usada |
-| `library.loans.request.duration` | Histogram (s) | Latência do `POST /loans` |
+## Observabilidade
 
-Logs são JSON estruturado com `correlationId`, `actorId` e identificadores de negócio (`loanId`, `bookId`, `userId`), sem dados pessoais. Localmente, tudo aparece no Aspire Dashboard (http://localhost:18888).
+Logs estruturados em JSON, traces e métricas via OpenTelemetry, visíveis no Aspire Dashboard (http://localhost:18888). As métricas de negócio pedidas no enunciado são `library.loans.created`, `library.loans.unavailable`, `library.loans.idempotent_replays` e `library.loans.request.duration`.
 
 ## 4. Decisões de concorrência, idempotência, cache e auditoria
-**Concorrência.** O empréstimo é decidido por um único `UPDATE books SET available_copies = available_copies - 1 WHERE id = @id AND is_active AND available_copies > 0`. Em Read Committed, a transação concorrente espera o lock da linha e o PostgreSQL reavalia o `WHERE` sobre a versão commitada, então só uma leva o último exemplar — sem Serializable, sem retry, sem lock distribuído. `CHECK (available_copies BETWEEN 0 AND total_copies)` é a defesa final e um índice único parcial impede dois empréstimos ativos do mesmo livro pelo mesmo leitor. Devolução, cancelamento e alterações do livro travam a linha (`SELECT ... FOR UPDATE`) e aplicam a regra no domínio, garantindo diff exato para a auditoria e que o estoque nunca suba duas vezes. *Trade-off*: token otimista (`xmin`) e Serializable foram descartados por gerarem retries sob contenção; lock distribuído no Redis tornaria o cache fonte de verdade.
 
-**Idempotência.** A `Idempotency-Key` é gravada no PostgreSQL na mesma transação do empréstimo (`INSERT ... ON CONFLICT DO NOTHING`). Uma repetição recebe a resposta gravada (inclusive rejeições de negócio); a mesma chave com outro pedido recebe 422; requisições simultâneas com a mesma chave esperam a primeira commitar e fazem replay. Erros inesperados fazem rollback da chave, permitindo retry. *Trade-off*: Redis seria mais rápido, mas perderia a atomicidade entre "chave gravada" e "empréstimo criado".
+**Concorrência.** Quem decide se ainda há exemplar é o banco, numa única instrução: "desconte um exemplar deste livro, desde que ainda reste algum". Se dois pedidos chegam juntos, o PostgreSQL executa um de cada vez nessa linha, e o segundo já encontra zero exemplares. Por isso o resultado é o mesmo com 2 ou 11 réplicas da API. Também há uma restrição no banco que impede o estoque de ficar negativo. Considerei lock distribuído no Redis e isolamento Serializable, mas os dois trazem mais complexidade (retries, dependência do Redis) sem ganho aqui.
 
-**Cache.** Cache-aside no Redis com um snapshot por livro (serve livro e disponibilidade), TTL de 60s e invalidação após cada commit que altera o livro. Sem cache em memória por réplica. Qualquer falha do Redis é ignorada (fail-open) com timeouts curtos; o readiness só depende do PostgreSQL. *Trade-off*: existe uma corrida residual em que um valor antigo pode ficar até um TTL no cache — aceitável porque a disponibilidade exibida é informativa e o empréstimo sempre decide no PostgreSQL.
+**Idempotência.** A chave enviada em `Idempotency-Key` é gravada no PostgreSQL na mesma transação do empréstimo. Se o pedido for repetido, a API devolve a resposta que já tinha dado. Se a mesma chave vier com outro pedido, a API recusa (422). Guardar a chave no Redis seria mais rápido, mas aí a chave e o empréstimo poderiam ficar dessincronizados numa falha.
 
-**Auditoria.** Eventos de negócio explícitos (`BookCreated`, `LoanReturned`...) gravados pelos handlers na mesma transação da mudança, com entidade, id, ação, ator, timestamp UTC, `correlationId` e o diff/snapshot em `jsonb`. Triggers no banco bloqueiam UPDATE, DELETE e TRUNCATE na trilha. Dados pessoais ficam fora dela (LGPD: a trilha não pode ser apagada). *Trade-off*: um interceptor do EF seria automático, mas perderia a intenção de negócio e não enxergaria o `UPDATE` atômico do empréstimo.
+**Cache.** As consultas de livro e de disponibilidade usam o Redis. Sempre que um empréstimo, devolução ou alteração muda o livro, a entrada do cache é apagada logo depois de gravar no banco. Se o Redis cair, a API continua funcionando direto no banco. O cache nunca decide nada: a decisão de emprestar é sempre do PostgreSQL. A contrapartida é que, num caso raro de leitura e escrita simultâneas, o cache pode mostrar um valor desatualizado por até 60 segundos.
+
+**Auditoria.** Cada mudança de negócio (livro criado, empréstimo devolvido etc.) grava um evento com quem fez, quando, o que mudou e o identificador da requisição, na mesma transação da mudança. O próprio banco proíbe alterar ou apagar esses eventos. Dados pessoais dos leitores ficam fora da trilha, porque ela não pode ser apagada e a LGPD garante o direito de exclusão.
 
 ## 5. Limitações conhecidas e evolução para produção
-- **Sem autenticação**: o `X-Actor-Id` é confiado. Evolução: JWT, com o `sub` como ator e no escopo da idempotência.
-- **Chaves de idempotência sem limpeza**. Evolução: job agendado removendo registros com mais de 24h (há índice em `created_at`).
-- **Paginação por offset**. Evolução: keyset em `(occurred_at, id)` para a auditoria, que cresce sem limite.
-- **Corrida residual do cache** (valor antigo por até um TTL). Evolução: *delayed double delete* ou snapshot versionado.
-- **Exemplares como contador**, sem rastrear o exemplar físico. Evolução: tabela de exemplares com `SELECT ... FOR UPDATE SKIP LOCKED`.
-- **Sem anonimização de usuário**. Evolução: endpoint que anonimiza nome/e-mail e registra `UserAnonymized`.
-- **Crescimento de `audit_events`**. Evolução: particionamento mensal por `occurred_at`.
-- **Conexões**: 11 réplicas × pool de 8 = 88, abaixo do limite padrão do PostgreSQL. Acima disso, PgBouncer.
-- **Kubernetes mínimo**. Evolução: HPA (2–11), PodDisruptionBudget, Ingress com TLS, NetworkPolicy e imagens publicadas em registry.
-- **Sem dashboards e alertas**. Evolução: SLO de p99 do `POST /loans` e alerta sobre a taxa de `library.loans.unavailable`.
+
+- Não há autenticação: o `X-Actor-Id` é aceito como veio. Em produção, o ator viria de um token JWT.
+- As chaves de idempotência não expiram. O próximo passo é uma rotina que apague as com mais de 24 horas.
+- A trilha de auditoria cresce sem limite. Em produção, particionaria a tabela por mês e trocaria a paginação por offset por paginação por cursor.
+- Os exemplares são um contador. Para rastrear cada exemplar físico, seria preciso uma tabela de exemplares.
+- Não há como anonimizar um leitor. Seria um endpoint novo, registrado na auditoria.
+- Com mais de 11 réplicas, as conexões passariam do limite padrão do PostgreSQL. A solução seria um pool externo, como o PgBouncer.
+- Os manifests de Kubernetes são o mínimo pedido. Faltam autoscaling, Ingress com TLS e políticas de rede.
+- Há métricas, mas não dashboards nem alertas prontos.
 
 ## 6. Kubernetes
-Manifests em [`deploy/k8s/`](deploy/k8s) (YAML puro; nenhum cluster é necessário para avaliar):
 
-| Arquivo | Conteúdo |
-|---|---|
-| `configmap.yaml` | Configuração não secreta (ambiente, prazo do empréstimo, TTL do cache, OTLP) |
-| `secret.example.yaml` | Formato do Secret com valores `CHANGE_ME` — nunca versionar valores reais |
-| `migration-job.yaml` | `Job` que aplica as migrations com a imagem `migrator` |
-| `deployment.yaml` | 2 réplicas, requests/limits, liveness `/health/live`, readiness `/health/ready` |
-| `service.yaml` | `ClusterIP` porta 80 → 8080 |
+Os manifests estão em [`deploy/k8s/`](deploy/k8s): Deployment com 2 réplicas, Service, ConfigMap, um Secret de exemplo (sem valores reais) e um Job que aplica as migrations antes da API subir.
 
-As imagens `library-api:1.0.0` e `library-migrator:1.0.0` são placeholders — publique as imagens dos targets `runtime` e `migrator` do Dockerfile no seu registry e ajuste as tags.
+Ordem para aplicar num cluster:
 
 ```bash
 kubectl create secret generic library-api-secrets --from-literal=ConnectionStrings__Postgres="<postgres>" --from-literal=ConnectionStrings__Redis="<redis>"
 ```
 
 ```bash
-kubectl apply -f deploy/k8s/configmap.yaml
-```
-
-```bash
-kubectl apply -f deploy/k8s/migration-job.yaml
-```
-
-```bash
-kubectl wait --for=condition=complete job/library-api-migrations --timeout=120s
+kubectl apply -f deploy/k8s/configmap.yaml -f deploy/k8s/migration-job.yaml
 ```
 
 ```bash
 kubectl apply -f deploy/k8s/deployment.yaml -f deploy/k8s/service.yaml
 ```
 
-**Probes**: liveness não consulta dependências — uma queda do PostgreSQL ou do Redis nunca reinicia o processo. Readiness retorna 503 só sem PostgreSQL (o pod sai do balanceamento); sem Redis o status é `Degraded` (200) e o pod continua servindo, porque o cache é fail-open.
+As imagens nos manifests (`library-api:1.0.0` e `library-migrator:1.0.0`) são nomes de exemplo. Antes de usar, é preciso publicar as imagens num registry.
 
-## 7. Correção entre 2 e 11 réplicas
-As réplicas não guardam estado que influencie decisões; toda coordenação acontece no PostgreSQL. Por isso escalar de 2 para 11 não muda o comportamento:
+Sobre as probes: a de liveness não depende do banco nem do Redis, então uma queda deles nunca reinicia a API. A de readiness tira a réplica do balanceamento só se o PostgreSQL estiver fora. Sem o Redis a réplica continua atendendo, só sem cache.
 
-- **Último exemplar**: update condicional atômico (descrito na seção 4) — exatamente um vence, de qualquer réplica. Coberto por teste com dois hosts e 20 requisições simultâneas.
-- **Empréstimo duplicado**: índice único parcial `(book_id, user_id) WHERE status = 'Active'`.
-- **Idempotência**: a mesma chave em réplicas diferentes bloqueia na chave primária até a primeira commitar e então recebe a resposta gravada.
-- **Devolução/cancelamento**: lock da linha do empréstimo; uma segunda devolução simultânea recebe 409 e o estoque sobe uma vez. Locks sempre na ordem empréstimo → livro, sem deadlock.
-- **Cache**: Redis compartilhado entre réplicas, invalidado após cada commit, sem cache em memória local; o Redis nunca participa de uma decisão.
-- **Conexões**: `Maximum Pool Size=8` por réplica → 11 × 8 = 88 conexões, abaixo do `max_connections` padrão (100) do PostgreSQL.
-- **Migrations**: executadas uma vez pelo `Job` (com o lock de migração do EF Core), nunca por cada réplica no startup.
-- **Auditoria e correlação**: gravadas na transação de cada mudança, com o `correlationId` da requisição — a trilha é a mesma não importa qual réplica atendeu.
+## 7. Por que funciona com 2 a 11 réplicas
+
+As réplicas não guardam nada em memória que influencie uma decisão. Tudo o que precisa ser coordenado fica no PostgreSQL:
+
+- o último exemplar é decidido pelo banco, como descrito na seção 4;
+- um leitor não consegue dois empréstimos ativos do mesmo livro, por uma restrição única no banco;
+- a mesma `Idempotency-Key` enviada a réplicas diferentes gera um único empréstimo;
+- devolver duas vezes ao mesmo tempo devolve o exemplar uma vez só;
+- o cache é um só, compartilhado por todas as réplicas;
+- cada réplica usa no máximo 8 conexões, então 11 réplicas ficam abaixo do limite padrão de 100 do PostgreSQL;
+- as migrations rodam uma única vez, pelo Job, e não em cada réplica.

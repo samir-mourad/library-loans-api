@@ -13,5 +13,5 @@ Cada parte tem uma spec própria (`NN-nome.md`) com: objetivo, escopo, fora de e
 | 07 | Idempotência: `Idempotency-Key`, replay, 400/422 | ✅ |
 | 08 | Cache: cache-aside Redis, invalidação pós-commit, fail-open | ✅ |
 | 09 | Métricas de negócio | ✅ |
-| 10 | Kubernetes: manifests com Kustomize, HPA 2–11, Job de migration | ⏳ |
+| 10 | Kubernetes: manifests YAML (Deployment, Service, ConfigMap, Secret de exemplo, Job de migration) | ✅ |
 | 11 | README e ADRs finais | ⏳ |

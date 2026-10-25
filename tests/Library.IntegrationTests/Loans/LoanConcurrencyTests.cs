@@ -1,5 +1,6 @@
 using System.Net;
 using Library.Api.Features.Audit;
+using Library.Api.Features.Books;
 using Library.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -94,6 +95,51 @@ public class LoanConcurrencyTests(ApiFactory factory)
         Assert.Equal("loan.duplicate_active", await rejected.ReadProblemCodeAsync());
         Assert.Equal(1, await factory.ReadAvailableCopiesAsync(book.Id));
         Assert.Equal(1, await factory.CountLoansAsync(book.Id));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public async Task Reducing_copies_concurrently_with_loans_never_breaks_availability(int round)
+    {
+        await using var replicaB = factory.WithWebHostBuilder(_ => { });
+        using var clientA = factory.CreateClient();
+        using var clientB = replicaB.CreateClient();
+        var book = await clientA.CreateBookAsync(BookApi.NewCreateRequest(totalCopies: 5, title: $"Concurrent patch {round} {Guid.NewGuid():N}"));
+        var users = await CreateUsersAsync(clientA, 4);
+        var loanRequests = users.Select<Guid, Func<Task<HttpResponseMessage>>>((userId, index) =>
+            () => (index % 2 == 0 ? clientA : clientB).RequestLoanAsync(book.Id, userId));
+        Func<Task<HttpResponseMessage>> reduceCopies = () =>
+            clientB.SendJsonAsync(HttpMethod.Patch, BookApi.BookPath(book.Id), new UpdateBookRequest { TotalCopies = 2 });
+
+        var responses = await RunConcurrentlyAsync([.. loanRequests, reduceCopies]);
+        var patchResponse = responses[^1];
+        var (totalCopies, availableCopies) = await ReadCopiesAsync(book.Id);
+        var loans = await factory.CountLoansAsync(book.Id);
+
+        Assert.Equal(totalCopies - loans, availableCopies);
+        Assert.InRange(availableCopies, 0, totalCopies);
+        Assert.Equal(responses[..^1].Count(response => response.StatusCode == HttpStatusCode.Created), loans);
+        if (patchResponse.StatusCode == HttpStatusCode.OK)
+        {
+            Assert.Equal(2, totalCopies);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Conflict, patchResponse.StatusCode);
+            Assert.Equal("book.copies_below_loaned", await patchResponse.ReadProblemCodeAsync());
+            Assert.Equal(5, totalCopies);
+        }
+    }
+
+    private async Task<(int TotalCopies, int AvailableCopies)> ReadCopiesAsync(Guid bookId)
+    {
+        await using var context = factory.CreateDbContext();
+        var book = await context.Books.AsNoTracking().SingleAsync(candidate => candidate.Id == bookId, TestContext.Current.CancellationToken);
+        return (book.TotalCopies, book.AvailableCopies);
     }
 
     private static async Task<HttpResponseMessage[]> RunConcurrentlyAsync(IEnumerable<Func<Task<HttpResponseMessage>>> requests)

@@ -4,6 +4,7 @@ public static class LoansExtensions
 {
     public static IServiceCollection AddLoans(this IServiceCollection services)
     {
+        services.AddSingleton<LoanMetrics>();
         services.AddScoped<CreateLoanHandler>();
         services.AddScoped<IdempotentCreateLoanHandler>();
         services.AddScoped<GetLoanHandler>();

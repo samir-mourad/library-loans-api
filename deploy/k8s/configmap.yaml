@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: library-api-config
+  labels:
+    app.kubernetes.io/name: library-api
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  Loans__DefaultPeriodDays: "14"
+  Cache__BookTtlSeconds: "60"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_SERVICE_NAME: library-api

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using Library.Api.Features.Books;
 using Library.Api.Infrastructure.Pagination;
-using Library.Domain.Books;
 using Library.Domain.Loans;
 
 namespace Library.Api.Features.Loans;
@@ -24,7 +24,7 @@ public sealed record AvailabilityResponse(
     bool IsActive,
     bool IsAvailable)
 {
-    public static AvailabilityResponse From(Book book)
+    public static AvailabilityResponse From(BookResponse book)
     {
         ArgumentNullException.ThrowIfNull(book);
 
@@ -32,7 +32,7 @@ public sealed record AvailabilityResponse(
             book.Id,
             book.TotalCopies,
             book.AvailableCopies,
-            book.LoanedCopies,
+            book.TotalCopies - book.AvailableCopies,
             book.IsActive,
             book.IsActive && book.AvailableCopies > 0);
     }

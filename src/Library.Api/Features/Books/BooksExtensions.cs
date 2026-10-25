@@ -4,6 +4,7 @@ public static class BooksExtensions
 {
     public static IServiceCollection AddBooks(this IServiceCollection services)
     {
+        services.AddScoped<BookCache>();
         services.AddScoped<CreateBookHandler>();
         services.AddScoped<GetBookHandler>();
         services.AddScoped<ListBooksHandler>();

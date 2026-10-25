@@ -1,4 +1,5 @@
 using Library.Api.Features.Audit;
+using Library.Api.Features.Books;
 using Library.Api.Infrastructure.Persistence;
 using Library.Domain.Common;
 using Library.Domain.Loans;
@@ -16,6 +17,7 @@ public sealed class LoanCloser(
     LibraryDbContext dbContext,
     IAuditTrail auditTrail,
     TimeProvider clock,
+    BookCache bookCache,
     ILogger<LoanCloser> logger)
 {
     public async Task<Result<LoanResponse>> CloseAsync(
@@ -49,6 +51,7 @@ public sealed class LoanCloser(
         auditTrail.Record(AuditEntityTypes.Loan, loan.Id, auditAction, auditData(loan, change.Value));
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        await bookCache.InvalidateAsync(loan.BookId);
 
         LoanLog.Closed(logger, loan.Id, loan.BookId, loan.Status);
         return LoanResponse.From(loan, now);

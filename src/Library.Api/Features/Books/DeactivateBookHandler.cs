@@ -10,7 +10,7 @@ namespace Library.Api.Features.Books;
 /// Soft-deletes a book under a row lock. Books are never physically removed, so their loan and audit history survive.
 /// Deactivating an inactive book succeeds without recording a new event.
 /// </summary>
-public sealed class DeactivateBookHandler(LibraryDbContext dbContext, IAuditTrail auditTrail, TimeProvider clock)
+public sealed class DeactivateBookHandler(LibraryDbContext dbContext, IAuditTrail auditTrail, TimeProvider clock, BookCache bookCache)
 {
     public async Task<Result> HandleAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -22,7 +22,8 @@ public sealed class DeactivateBookHandler(LibraryDbContext dbContext, IAuditTrai
             return BookErrors.NotFound;
         }
 
-        if (book.Deactivate(clock.GetUtcNow()))
+        var deactivated = book.Deactivate(clock.GetUtcNow());
+        if (deactivated)
         {
             auditTrail.Record(AuditEntityTypes.Book, book.Id, AuditActions.BookDeactivated, new
             {
@@ -32,6 +33,11 @@ public sealed class DeactivateBookHandler(LibraryDbContext dbContext, IAuditTrai
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        if (deactivated)
+        {
+            await bookCache.InvalidateAsync(book.Id);
+        }
 
         return Result.Success();
     }

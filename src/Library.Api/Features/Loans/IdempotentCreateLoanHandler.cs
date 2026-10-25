@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Library.Api.Features.Books;
 using Library.Api.Infrastructure.ErrorHandling;
 using Library.Api.Infrastructure.Idempotency;
 using Library.Api.Infrastructure.Persistence;
@@ -17,6 +18,7 @@ public sealed class IdempotentCreateLoanHandler(
     LibraryDbContext dbContext,
     IdempotencyStore idempotencyStore,
     CreateLoanHandler createLoanHandler,
+    BookCache bookCache,
     ILogger<IdempotentCreateLoanHandler> logger)
 {
     public const string Scope = "POST /loans";
@@ -59,6 +61,7 @@ public sealed class IdempotentCreateLoanHandler(
 
         if (result.IsSuccess)
         {
+            await bookCache.InvalidateAsync(result.Value.BookId);
             LoanLog.Created(logger, result.Value.Id, result.Value.BookId, result.Value.UserId);
         }
 

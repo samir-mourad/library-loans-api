@@ -10,7 +10,7 @@ namespace Library.Api.Features.Books;
 /// Applies a partial update under a row lock and records a <c>BookUpdated</c> event with the exact field diff.
 /// A request that changes nothing produces no audit event.
 /// </summary>
-public sealed class UpdateBookHandler(LibraryDbContext dbContext, IAuditTrail auditTrail, TimeProvider clock)
+public sealed class UpdateBookHandler(LibraryDbContext dbContext, IAuditTrail auditTrail, TimeProvider clock, BookCache bookCache)
 {
     public async Task<Result<BookResponse>> HandleAsync(Guid id, UpdateBookRequest request, CancellationToken cancellationToken)
     {
@@ -37,6 +37,11 @@ public sealed class UpdateBookHandler(LibraryDbContext dbContext, IAuditTrail au
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        if (updated.Value.HasChanges)
+        {
+            await bookCache.InvalidateAsync(book.Id);
+        }
 
         return BookResponse.From(book);
     }
